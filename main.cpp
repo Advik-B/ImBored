@@ -48,31 +48,37 @@ int main() {
         ImGui_ImplOpenGL3_Init("#version 330 core");
         
         // Load fonts with FreeType - Main font
+        std::cout << "DEBUG: Loading main font...\n";
         ImFontConfig config;
         config.FontDataOwnedByAtlas = false;
         config.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor;
         
         ImFont* mainFont = io.Fonts->AddFontFromFileTTF("resources/Quicksand-Regular.ttf", 18.0f, &config);
+        std::cout << "DEBUG: Main font loaded\n";
         
-        // Load colored emoji font with comprehensive emoji ranges
-        // Covers: emoticons, symbols, pictographs, miscellaneous, supplemental, extended
+        // Load colored emoji font with optimized emoji ranges
+        // Reduced ranges to avoid CPU spike during font atlas build
+        // No variation selectors (0xFE00-0xFE0F) as they cause rendering issues
         static const ImWchar emoji_ranges[] = {
             0x1F300, 0x1F9FF, // Emoticons, symbols, pictographs, etc.
             0x2600,  0x27BF,  // Miscellaneous symbols
             0x2700,  0x27EF,  // Dingbats
-            0xFE00,  0xFE0F,  // Variation selectors
             0,
         };
         
         ImFontConfig emojiConfig;
         emojiConfig.FontDataOwnedByAtlas = false;
-        emojiConfig.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor;
+        emojiConfig.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeLoaderFlags_Bitmap;
         emojiConfig.MergeMode = true;
         emojiConfig.PixelSnapH = false; // Better for emoji rendering
+        emojiConfig.RasterizerMultiply = 1.5f; // Better color rendering
         
+        std::cout << "DEBUG: Adding emoji font...\n";
         io.Fonts->AddFontFromFileTTF("resources/NotoColorEmoji-Regular.ttf", 18.0f, &emojiConfig, emoji_ranges);
         
+        std::cout << "DEBUG: Building font atlas...\n";
         io.Fonts->Build();
+        std::cout << "DEBUG: Font atlas built successfully\n";
         
         if (mainFont) {
             io.FontDefault = mainFont;
@@ -108,7 +114,7 @@ int main() {
             ImGui::Spacing();
             ImGui::Text("Rendered using NotoColorEmoji-Regular.ttf with FreeType support");
             ImGui::End();
-            
+
             ImGui::ShowDemoWindow();
             
             // Rendering
@@ -117,6 +123,9 @@ int main() {
             renderer.render();
             
             window.swapBuffers();
+            
+            // Limit framerate to 60 FPS to reduce CPU load
+            glfwWaitEventsTimeout(1.0 / 60.0);
         }
         
         // Cleanup
