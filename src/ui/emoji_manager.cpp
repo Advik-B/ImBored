@@ -74,24 +74,44 @@ bool EmojiManager::initialize(const char* fontPath, float fontSize) {
     }
     m_ftFace = face;
     
+    std::cout << "EmojiManager: Font info:\n";
+    std::cout << "  Family: " << (face->family_name ? face->family_name : "N/A") << "\n";
+    std::cout << "  Num fixed sizes: " << face->num_fixed_sizes << "\n";
+    std::cout << "  Has color: " << ((face->face_flags & FT_FACE_FLAG_COLOR) ? "yes" : "no") << "\n";
+    
     // Check for fixed sizes (color emoji fonts usually have these)
     if (face->num_fixed_sizes > 0) {
-        std::cout << "EmojiManager: Font has " << face->num_fixed_sizes << " fixed sizes\n";
-        // Use the largest fixed size
-        int bestSize = 0;
+        std::cout << "EmojiManager: Available fixed sizes:\n";
         for (int i = 0; i < face->num_fixed_sizes; i++) {
-            if (face->available_sizes[i].height > face->available_sizes[bestSize].height) {
+            std::cout << "  [" << i << "] " << face->available_sizes[i].width 
+                      << "x" << face->available_sizes[i].height << "px\n";
+        }
+        
+        // Use the fixed size closest to requested fontSize
+        int bestSize = 0;
+        int minDiff = std::abs(face->available_sizes[0].height - static_cast<int>(fontSize));
+        for (int i = 1; i < face->num_fixed_sizes; i++) {
+            int diff = std::abs(face->available_sizes[i].height - static_cast<int>(fontSize));
+            if (diff < minDiff) {
+                minDiff = diff;
                 bestSize = i;
             }
         }
-        FT_Select_Size(face, bestSize);
-        std::cout << "EmojiManager: Selected fixed size: " << face->available_sizes[bestSize].height << "px\n";
+        
+        if (FT_Select_Size(face, bestSize) == 0) {
+            std::cout << "EmojiManager: Selected fixed size " << bestSize << ": " 
+                      << face->available_sizes[bestSize].height << "px\n";
+            m_fontSize = face->available_sizes[bestSize].height; // Use actual size
+        } else {
+            std::cerr << "Failed to select fixed size\n";
+            FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(fontSize));
+        }
     } else {
         // Set font size
         FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(fontSize));
     }
     
-    std::cout << "EmojiManager: Extracting SVG emojis from font...\n";
+    std::cout << "EmojiManager: Extracting emoji glyphs from font...\n";
     
     // Extract SVG glyphs for our emoji ranges
     int extractedCount = 0;
@@ -155,8 +175,13 @@ void EmojiManager::buildAtlas() {
     
     FT_Face face = (FT_Face)m_ftFace;
     
+    // Set a larger pixel size for better quality
+    int pixelSize = std::max(32, static_cast<int>(m_fontSize * 2));
+    FT_Set_Pixel_Sizes(face, 0, pixelSize);
+    std::cout << "EmojiManager: Using pixel size: " << pixelSize << "\n";
+    
     // Calculate required atlas size
-    int emojiSize = static_cast<int>(m_fontSize);
+    int emojiSize = pixelSize;
     int padding = 2;
     int glyphsPerRow = 16;
     int numGlyphs = m_emojiGlyphs.size();
@@ -183,6 +208,7 @@ void EmojiManager::buildAtlas() {
     int x = 0, y = 0;
     int index = 0;
     int skipped = 0;
+    int rendered = 0;
     
     for (auto& pair : m_emojiGlyphs) {
         uint32_t codepoint = pair.first;
@@ -194,36 +220,59 @@ void EmojiManager::buildAtlas() {
             continue;
         }
         
-        // Try different load flags to get color bitmap
-        FT_Int32 loadFlags[] = {
-            FT_LOAD_COLOR | FT_LOAD_RENDER,
-            FT_LOAD_DEFAULT | FT_LOAD_RENDER,
-            FT_LOAD_RENDER
-        };
-        
-        bool loaded = false;
-        for (auto flags : loadFlags) {
-            if (FT_Load_Glyph(face, glyphIndex, flags) == 0) {
-                FT_GlyphSlot slot = face->glyph;
-                if (slot->bitmap.buffer != nullptr && slot->bitmap.width > 0 && slot->bitmap.rows > 0) {
-                    loaded = true;
-                    break;
+        // Load glyph with color support
+        FT_Error err = FT_Load_Glyph(face, glyphIndex, FT_LOAD_COLOR);
+        if (err != 0) {
+            // Try without color
+            err = FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT);
+            if (err != 0) {
+                if (rendered == 0) {
+                    std::cout << "EmojiManager: Failed to load glyph, error: " << err << "\n";
                 }
+                skipped++;
+                continue;
             }
         }
         
-        if (!loaded) {
+        FT_GlyphSlot slot = face->glyph;
+        
+        // Debug first glyph
+        if (rendered == 0) {
+            std::cout << "EmojiManager: First glyph info:\n";
+            std::cout << "  Codepoint: 0x" << std::hex << codepoint << std::dec << "\n";
+            std::cout << "  Glyph format: " << slot->format << " (BITMAP=" << FT_GLYPH_FORMAT_BITMAP << ")\n";
+            std::cout << "  Bitmap before render: " << slot->bitmap.width << "x" << slot->bitmap.rows << "\n";
+        }
+        
+        // Render the glyph
+        err = FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
+        if (err != 0) {
+            if (rendered == 0) {
+                std::cout << "EmojiManager: Render failed, error: " << err << "\n";
+            }
             skipped++;
             continue;
         }
         
-        FT_GlyphSlot slot = face->glyph;
         FT_Bitmap& bitmap = slot->bitmap;
         
         // Skip if no bitmap data
         if (bitmap.width == 0 || bitmap.rows == 0 || bitmap.buffer == nullptr) {
+            if (rendered == 0) {
+                std::cout << "EmojiManager: No bitmap data after render\n";
+                std::cout << "  Width: " << bitmap.width << ", Rows: " << bitmap.rows << "\n";
+                std::cout << "  Buffer: " << (bitmap.buffer ? "exists" : "null") << "\n";
+            }
             skipped++;
             continue;
+        }
+        
+        // Debug first successful render
+        if (rendered == 0) {
+            std::cout << "EmojiManager: First emoji rendered:\n";
+            std::cout << "  Codepoint: 0x" << std::hex << codepoint << std::dec << "\n";
+            std::cout << "  Size: " << bitmap.width << "x" << bitmap.rows << "\n";
+            std::cout << "  Pixel mode: " << (int)bitmap.pixel_mode << "\n";
         }
         
         // Copy bitmap to atlas
@@ -266,10 +315,10 @@ void EmojiManager::buildAtlas() {
             y += emojiSize + padding;
         }
         
-        index++;
+        rendered++;
     }
     
-    std::cout << "EmojiManager: Rendered " << index << " emojis to atlas (skipped: " << skipped << ")\n";
+    std::cout << "EmojiManager: Rendered " << rendered << " emojis to atlas (skipped: " << skipped << ")\n";
     
     // Create OpenGL texture
     createTexture();
