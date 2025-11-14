@@ -68,6 +68,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(lunasvg)
 
+# ---- Skia (for COLRv1 emoji rendering) ----
+# Note: Skia is a large library. For now, we'll use system Skia if available,
+# or download prebuilt binaries for the platform.
+# TODO: Add proper Skia integration when stable binaries are available
+# For now, we'll implement a Skia-based rasterizer that can be enabled when Skia is available
+
 # ---- ImGUI ----
 add_library(
     imgui
