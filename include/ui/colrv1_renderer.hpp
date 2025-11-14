@@ -3,12 +3,10 @@
 #include <vector>
 #include <cstdint>
 
-// Check if Skia is available
-#ifdef USE_SKIA
-#define SKIA_AVAILABLE
-// Forward declarations for Skia types
-class SkCanvas;
-class SkSurface;
+// Check if Skia is available and include headers
+#ifdef SKIA_AVAILABLE
+#include "include/core/SkCanvas.h"
+#include "include/core/SkSurface.h"
 #endif
 
 namespace ImBored::UI {

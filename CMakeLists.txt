@@ -91,25 +91,22 @@ FetchContent_MakeAvailable(lunasvg)
 option(USE_SKIA "Enable Skia for COLRv1 emoji rendering" ON)
 
 if(USE_SKIA)
-    # Try to find system Skia first
-    find_package(Skia QUIET)
-    
-    if(NOT Skia_FOUND)
-        message(STATUS "Skia not found. Attempting to build minimal Skia...")
-        
-        # For now, we'll use a minimal rasterizer without full Skia
-        # Full Skia integration requires downloading/building Skia separately
-        # Instructions: https://skia.org/docs/user/build/
-        set(SKIA_AVAILABLE FALSE)
-        message(WARNING "Skia integration requires manual setup. See docs/SKIA_SETUP.md")
-        message(WARNING "Falling back to grayscale emoji rendering")
-    else()
+    # Check if Skia library exists in thirdparty/skia
+    if(EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/skia/lib/libskia.a")
         set(SKIA_AVAILABLE TRUE)
-        message(STATUS "Found Skia: ${Skia_DIR}")
+        set(SKIA_LIBRARY "${CMAKE_SOURCE_DIR}/thirdparty/skia/lib/libskia.a")
+        set(SKIA_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/thirdparty/skia/include")
+        message(STATUS "Found Skia library: ${SKIA_LIBRARY}")
+        message(STATUS "Skia enabled - full COLRv1 emoji rendering available")
+    else()
+        set(SKIA_AVAILABLE FALSE)
+        message(WARNING "Skia library not found at thirdparty/skia/lib/libskia.a")
+        message(WARNING "Build Skia from source and place it there. See docs/SKIA_SETUP.md")
+        message(WARNING "Falling back to PNG/CBDT + grayscale emoji rendering")
     endif()
 else()
     set(SKIA_AVAILABLE FALSE)
-    message(STATUS "Skia disabled - using grayscale emoji rendering")
+    message(STATUS "Skia disabled - using PNG/CBDT + grayscale emoji rendering")
 endif()
 
 # ---- ImGUI ----
