@@ -54,6 +54,10 @@ FetchContent_Declare(
         GIT_TAG VER-2-14-1
 )
 set(FT_DISABLE_HARFBUZZ OFF CACHE BOOL "" FORCE)
+set(FT_REQUIRE_ZLIB ON CACHE BOOL "" FORCE)
+set(FT_REQUIRE_PNG ON CACHE BOOL "" FORCE)
+# Enable COLR/CPAL support for color emoji rendering
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(freetype)
 
 # ---- LunaSVG (for SVG emoji support) ----

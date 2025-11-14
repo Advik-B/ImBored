@@ -10,6 +10,7 @@
 #include FT_BITMAP_H
 #include FT_TRUETYPE_TABLES_H
 #include FT_SFNT_NAMES_H
+#include FT_COLOR_H
 
 // LunaSVG headers
 #include <lunasvg.h>
@@ -180,6 +181,18 @@ void EmojiManager::buildAtlas() {
     FT_Set_Pixel_Sizes(face, 0, pixelSize);
     std::cout << "EmojiManager: Using pixel size: " << pixelSize << "\n";
     
+    // Check if face has COLR table
+    FT_Color* palette = nullptr;
+    FT_UShort num_palette_entries = 0;
+    FT_Palette_Data palette_data;
+    
+    bool has_colr = FT_Palette_Select(face, 0, &palette) == 0;
+    if (has_colr) {
+        std::cout << "EmojiManager: Font has COLR/CPAL tables\n";
+        FT_Palette_Data_Get(face, &palette_data);
+        std::cout << "EmojiManager: Number of palettes: " << palette_data.num_palettes << "\n";
+    }
+    
     // Calculate required atlas size
     int emojiSize = pixelSize;
     int padding = 2;
@@ -206,9 +219,8 @@ void EmojiManager::buildAtlas() {
     
     // Render each emoji into the atlas
     int x = 0, y = 0;
-    int index = 0;
-    int skipped = 0;
     int rendered = 0;
+    int skipped = 0;
     
     for (auto& pair : m_emojiGlyphs) {
         uint32_t codepoint = pair.first;
@@ -220,93 +232,157 @@ void EmojiManager::buildAtlas() {
             continue;
         }
         
-        // Load glyph with color support
-        FT_Error err = FT_Load_Glyph(face, glyphIndex, FT_LOAD_COLOR);
-        if (err != 0) {
-            // Try without color
-            err = FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT);
-            if (err != 0) {
-                if (rendered == 0) {
-                    std::cout << "EmojiManager: Failed to load glyph, error: " << err << "\n";
-                }
-                skipped++;
-                continue;
-            }
-        }
+        // Try to render COLR glyph layer by layer
+        FT_LayerIterator iterator;
+        iterator.p = nullptr;
+        FT_UInt layer_glyph_index;
+        FT_UInt layer_color_index;
         
-        FT_GlyphSlot slot = face->glyph;
+        // Create a temporary buffer for this emoji
+        std::vector<uint8_t> emoji_buffer(emojiSize * emojiSize * 4, 0);
+        
+        bool has_layers = false;
+        int layer_count = 0;
         
         // Debug first glyph
         if (rendered == 0) {
-            std::cout << "EmojiManager: First glyph info:\n";
-            std::cout << "  Codepoint: 0x" << std::hex << codepoint << std::dec << "\n";
-            std::cout << "  Glyph format: " << slot->format << " (BITMAP=" << FT_GLYPH_FORMAT_BITMAP << ")\n";
-            std::cout << "  Bitmap before render: " << slot->bitmap.width << "x" << slot->bitmap.rows << "\n";
+            std::cout << "EmojiManager: Testing COLR layers for glyph index " << glyphIndex << "\n";
         }
         
-        // Render the glyph
-        err = FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
-        if (err != 0) {
-            if (rendered == 0) {
-                std::cout << "EmojiManager: Render failed, error: " << err << "\n";
+        while (FT_Get_Color_Glyph_Layer(face, glyphIndex, &layer_glyph_index, &layer_color_index, &iterator)) {
+            has_layers = true;
+            layer_count++;
+            
+            if (rendered == 0 && layer_count == 1) {
+                std::cout << "EmojiManager: Found COLR layers!\n";
             }
-            skipped++;
-            continue;
-        }
-        
-        FT_Bitmap& bitmap = slot->bitmap;
-        
-        // Skip if no bitmap data
-        if (bitmap.width == 0 || bitmap.rows == 0 || bitmap.buffer == nullptr) {
-            if (rendered == 0) {
-                std::cout << "EmojiManager: No bitmap data after render\n";
-                std::cout << "  Width: " << bitmap.width << ", Rows: " << bitmap.rows << "\n";
-                std::cout << "  Buffer: " << (bitmap.buffer ? "exists" : "null") << "\n";
+            
+            // Load the layer glyph
+            FT_Error err = FT_Load_Glyph(face, layer_glyph_index, FT_LOAD_DEFAULT);
+            if (err != 0) {
+                if (rendered == 0) {
+                    std::cout << "EmojiManager: Failed to load layer glyph: " << err << "\n";
+                }
+                continue;
             }
-            skipped++;
-            continue;
-        }
-        
-        // Debug first successful render
-        if (rendered == 0) {
-            std::cout << "EmojiManager: First emoji rendered:\n";
-            std::cout << "  Codepoint: 0x" << std::hex << codepoint << std::dec << "\n";
-            std::cout << "  Size: " << bitmap.width << "x" << bitmap.rows << "\n";
-            std::cout << "  Pixel mode: " << (int)bitmap.pixel_mode << "\n";
-        }
-        
-        // Copy bitmap to atlas
-        for (unsigned int row = 0; row < bitmap.rows && y + row < m_atlasHeight; ++row) {
-            for (unsigned int col = 0; col < bitmap.width && x + col < m_atlasWidth; ++col) {
-                int atlasIdx = ((y + row) * m_atlasWidth + (x + col)) * 4;
+            
+            // Render the layer
+            err = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+            if (err != 0) continue;
+            
+            FT_Bitmap& bitmap = face->glyph->bitmap;
+            if (bitmap.width == 0 || bitmap.rows == 0) continue;
+            
+            // Get the color for this layer
+            uint8_t r = 0, g = 0, b = 0, a = 255;
+            if (layer_color_index != 0xFFFF && palette != nullptr) {
+                FT_Color color = palette[layer_color_index];
+                r = color.red;
+                g = color.green;
+                b = color.blue;
+                a = color.alpha;
+            }
+            
+            // Composite this layer onto the emoji buffer
+            int bearingX = face->glyph->bitmap_left;
+            int bearingY = emojiSize - face->glyph->bitmap_top;
+            
+            for (unsigned int row = 0; row < bitmap.rows; ++row) {
+                int dest_y = bearingY + row;
+                if (dest_y < 0 || dest_y >= emojiSize) continue;
                 
-                if (bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
-                    // BGRA format (color emoji)
-                    int bitmapIdx = row * bitmap.pitch + col * 4;
-                    m_atlasData[atlasIdx + 0] = bitmap.buffer[bitmapIdx + 2]; // R
-                    m_atlasData[atlasIdx + 1] = bitmap.buffer[bitmapIdx + 1]; // G
-                    m_atlasData[atlasIdx + 2] = bitmap.buffer[bitmapIdx + 0]; // B
-                    m_atlasData[atlasIdx + 3] = bitmap.buffer[bitmapIdx + 3]; // A
-                } else if (bitmap.pixel_mode == FT_PIXEL_MODE_GRAY) {
-                    // Grayscale
+                for (unsigned int col = 0; col < bitmap.width; ++col) {
+                    int dest_x = bearingX + col;
+                    if (dest_x < 0 || dest_x >= emojiSize) continue;
+                    
+                    int bufferIdx = (dest_y * emojiSize + dest_x) * 4;
+                    int bitmapIdx = row * bitmap.pitch + col;
+                    
+                    // Alpha blend the layer
+                    uint8_t layer_alpha = (bitmap.buffer[bitmapIdx] * a) / 255;
+                    uint8_t inv_alpha = 255 - layer_alpha;
+                    
+                    emoji_buffer[bufferIdx + 0] = (r * layer_alpha + emoji_buffer[bufferIdx + 0] * inv_alpha) / 255;
+                    emoji_buffer[bufferIdx + 1] = (g * layer_alpha + emoji_buffer[bufferIdx + 1] * inv_alpha) / 255;
+                    emoji_buffer[bufferIdx + 2] = (b * layer_alpha + emoji_buffer[bufferIdx + 2] * inv_alpha) / 255;
+                    emoji_buffer[bufferIdx + 3] = std::max(layer_alpha, emoji_buffer[bufferIdx + 3]);
+                }
+            }
+        }
+        
+        if (rendered == 0) {
+            if (has_layers) {
+                std::cout << "EmojiManager: First emoji has " << layer_count << " layers\n";
+            } else {
+                std::cout << "EmojiManager: First emoji has no COLR layers (likely COLRv1 or other format)\n";
+            }
+        }
+        
+        if (!has_layers) {
+            // Fallback to regular rendering
+            FT_Error err = FT_Load_Glyph(face, glyphIndex, FT_LOAD_DEFAULT);
+            if (err != 0) {
+                skipped++;
+                continue;
+            }
+            
+            err = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+            if (err != 0) {
+                skipped++;
+                continue;
+            }
+            
+            FT_Bitmap& bitmap = face->glyph->bitmap;
+            if (bitmap.width == 0 || bitmap.rows == 0) {
+                skipped++;
+                continue;
+            }
+            
+            // Render grayscale glyph
+            int bearingX = face->glyph->bitmap_left;
+            int bearingY = emojiSize - face->glyph->bitmap_top;
+            
+            for (unsigned int row = 0; row < bitmap.rows; ++row) {
+                int dest_y = bearingY + row;
+                if (dest_y < 0 || dest_y >= emojiSize) continue;
+                
+                for (unsigned int col = 0; col < bitmap.width; ++col) {
+                    int dest_x = bearingX + col;
+                    if (dest_x < 0 || dest_x >= emojiSize) continue;
+                    
+                    int bufferIdx = (dest_y * emojiSize + dest_x) * 4;
                     int bitmapIdx = row * bitmap.pitch + col;
                     uint8_t gray = bitmap.buffer[bitmapIdx];
-                    m_atlasData[atlasIdx + 0] = gray;
-                    m_atlasData[atlasIdx + 1] = gray;
-                    m_atlasData[atlasIdx + 2] = gray;
-                    m_atlasData[atlasIdx + 3] = gray;
+                    
+                    emoji_buffer[bufferIdx + 0] = gray;
+                    emoji_buffer[bufferIdx + 1] = gray;
+                    emoji_buffer[bufferIdx + 2] = gray;
+                    emoji_buffer[bufferIdx + 3] = gray;
                 }
+            }
+        }
+        
+        // Copy emoji buffer to atlas
+        for (int row = 0; row < emojiSize && y + row < m_atlasHeight; ++row) {
+            for (int col = 0; col < emojiSize && x + col < m_atlasWidth; ++col) {
+                int atlasIdx = ((y + row) * m_atlasWidth + (x + col)) * 4;
+                int bufferIdx = (row * emojiSize + col) * 4;
+                
+                m_atlasData[atlasIdx + 0] = emoji_buffer[bufferIdx + 0];
+                m_atlasData[atlasIdx + 1] = emoji_buffer[bufferIdx + 1];
+                m_atlasData[atlasIdx + 2] = emoji_buffer[bufferIdx + 2];
+                m_atlasData[atlasIdx + 3] = emoji_buffer[bufferIdx + 3];
             }
         }
         
         // Calculate UV coordinates
         emoji.u0 = static_cast<float>(x) / m_atlasWidth;
         emoji.v0 = static_cast<float>(y) / m_atlasHeight;
-        emoji.u1 = static_cast<float>(x + bitmap.width) / m_atlasWidth;
-        emoji.v1 = static_cast<float>(y + bitmap.rows) / m_atlasHeight;
-        emoji.width = bitmap.width;
-        emoji.height = bitmap.rows;
-        emoji.advance = slot->advance.x / 64.0f;
+        emoji.u1 = static_cast<float>(x + emojiSize) / m_atlasWidth;
+        emoji.v1 = static_cast<float>(y + emojiSize) / m_atlasHeight;
+        emoji.width = emojiSize;
+        emoji.height = emojiSize;
+        emoji.advance = emojiSize;
         
         // Move to next position
         x += emojiSize + padding;
