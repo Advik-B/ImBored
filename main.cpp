@@ -1,6 +1,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <chrono>
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -49,6 +50,8 @@ int main() {
         
         // Load fonts with FreeType - Main font
         std::cout << "DEBUG: Loading main font...\n";
+        auto font_start = std::chrono::high_resolution_clock::now();
+        
         ImFontConfig config;
         config.FontDataOwnedByAtlas = false;
         config.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor;
@@ -58,27 +61,38 @@ int main() {
         
         // Load colored emoji font with optimized emoji ranges
         // Reduced ranges to avoid CPU spike during font atlas build
-        // No variation selectors (0xFE00-0xFE0F) as they cause rendering issues
+        // Include only commonly used emoji ranges for better performance
+        // Note: Variation selectors (0xFE00-0xFE0F) are not loaded as glyphs
         static const ImWchar emoji_ranges[] = {
-            0x1F300, 0x1F9FF, // Emoticons, symbols, pictographs, etc.
-            0x2600,  0x27BF,  // Miscellaneous symbols
-            0x2700,  0x27EF,  // Dingbats
+            0x1F300, 0x1F5FF, // Miscellaneous Symbols and Pictographs
+            0x1F600, 0x1F64F, // Emoticons
+            0x1F680, 0x1F6FF, // Transport and Map Symbols
+            0x1F900, 0x1F9FF, // Supplemental Symbols and Pictographs
+            0x2600,  0x26FF,  // Miscellaneous Symbols
+            0x2700,  0x27BF,  // Dingbats
             0,
         };
         
         ImFontConfig emojiConfig;
         emojiConfig.FontDataOwnedByAtlas = false;
-        emojiConfig.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeLoaderFlags_Bitmap;
+        emojiConfig.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeLoaderFlags_Bitmap | ImGuiFreeTypeLoaderFlags_NoHinting;
         emojiConfig.MergeMode = true;
-        emojiConfig.PixelSnapH = false; // Better for emoji rendering
-        emojiConfig.RasterizerMultiply = 1.5f; // Better color rendering
+        emojiConfig.PixelSnapH = true; // Snap to pixel grid for crisp emoji rendering
+        emojiConfig.OversampleH = 1; // No oversampling needed for color bitmaps
+        emojiConfig.OversampleV = 1;
         
         std::cout << "DEBUG: Adding emoji font...\n";
         io.Fonts->AddFontFromFileTTF("resources/NotoColorEmoji-Regular.ttf", 18.0f, &emojiConfig, emoji_ranges);
         
         std::cout << "DEBUG: Building font atlas...\n";
+        auto atlas_start = std::chrono::high_resolution_clock::now();
         io.Fonts->Build();
-        std::cout << "DEBUG: Font atlas built successfully\n";
+        auto atlas_end = std::chrono::high_resolution_clock::now();
+        auto atlas_duration = std::chrono::duration_cast<std::chrono::milliseconds>(atlas_end - atlas_start);
+        auto font_duration = std::chrono::duration_cast<std::chrono::milliseconds>(atlas_end - font_start);
+        
+        std::cout << "DEBUG: Font atlas built successfully in " << atlas_duration.count() << "ms\n";
+        std::cout << "DEBUG: Total font loading time: " << font_duration.count() << "ms\n";
         
         if (mainFont) {
             io.FontDefault = mainFont;
