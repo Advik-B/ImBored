@@ -148,6 +148,11 @@ bool COLRv1Renderer::renderGlyph(void* ftFace, uint32_t glyphIndex, uint32_t cod
     }
 #endif
     
+    // Try to render PNG/CBDT bitmap strikes (embedded color bitmaps)
+    if (renderBitmapStrike(ftFace, glyphIndex, codepoint)) {
+        return true;
+    }
+    
     // Fallback to basic COLR v0 rendering
     // Try COLR v0 first (layered rendering)
     FT_LayerIterator iterator;
@@ -203,5 +208,70 @@ bool COLRv1Renderer::renderWithSkia(void* ftFace, uint32_t glyphIndex, uint32_t 
     return false;
 }
 #endif
+
+bool COLRv1Renderer::renderBitmapStrike(void* ftFace, uint32_t glyphIndex, uint32_t codepoint) {
+    FT_Face face = (FT_Face)ftFace;
+    
+    // Check if face has bitmap strikes (CBDT/CBLC or sbix tables)
+    if (!(face->face_flags & FT_FACE_FLAG_COLOR)) {
+        return false;
+    }
+    
+    // Try to load the glyph with color bitmaps enabled
+    FT_Error err = FT_Load_Glyph(face, glyphIndex, FT_LOAD_COLOR);
+    if (err != 0) {
+        return false;
+    }
+    
+    FT_GlyphSlot slot = face->glyph;
+    
+    // Check if we got a bitmap
+    if (slot->format != FT_GLYPH_FORMAT_BITMAP) {
+        return false;
+    }
+    
+    FT_Bitmap& bitmap = slot->bitmap;
+    if (bitmap.width == 0 || bitmap.rows == 0) {
+        return false;
+    }
+    
+    // Check if it's a color bitmap (BGRA format)
+    if (bitmap.pixel_mode != FT_PIXEL_MODE_BGRA) {
+        return false;
+    }
+    
+    // Copy the BGRA bitmap to our buffer
+    int bearingX = slot->bitmap_left;
+    int bearingY = m_height - slot->bitmap_top;
+    
+    for (unsigned int row = 0; row < bitmap.rows; ++row) {
+        int dest_y = bearingY + row;
+        if (dest_y < 0 || dest_y >= m_height) continue;
+        
+        for (unsigned int col = 0; col < bitmap.width; ++col) {
+            int dest_x = bearingX + col;
+            if (dest_x < 0 || dest_x >= m_width) continue;
+            
+            int bufferIdx = (dest_y * m_width + dest_x) * 4;
+            int bitmapIdx = (row * bitmap.pitch) + (col * 4);
+            
+            // BGRA -> RGBA conversion
+            uint8_t b = bitmap.buffer[bitmapIdx + 0];
+            uint8_t g = bitmap.buffer[bitmapIdx + 1];
+            uint8_t r = bitmap.buffer[bitmapIdx + 2];
+            uint8_t a = bitmap.buffer[bitmapIdx + 3];
+            
+            // Pre-multiplied alpha blending
+            if (a > 0) {
+                m_buffer[bufferIdx + 0] = r;
+                m_buffer[bufferIdx + 1] = g;
+                m_buffer[bufferIdx + 2] = b;
+                m_buffer[bufferIdx + 3] = a;
+            }
+        }
+    }
+    
+    return true;
+}
 
 } // namespace ImBored::UI

@@ -55,6 +55,9 @@ private:
     
     // Render a single paint layer (fallback)
     bool renderPaintLayer(void* ftFace, uint32_t glyphIndex, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a);
+    
+    // Render PNG/CBDT bitmap strikes (embedded color bitmaps)
+    bool renderBitmapStrike(void* ftFace, uint32_t glyphIndex, uint32_t codepoint);
 };
 
 } // namespace ImBored::UI
