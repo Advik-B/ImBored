@@ -1,0 +1,14 @@
+# Target labels
+ harfbuzz-populate
+# Source files and their labels
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/CMakeFiles/harfbuzz-populate
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/CMakeFiles/harfbuzz-populate.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/CMakeFiles/harfbuzz-populate-complete.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-build.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-configure.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-download.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-install.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-mkdir.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-patch.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-test.rule
+/home/runner/work/ImBored/ImBored/build/_deps/harfbuzz-subbuild/harfbuzz-populate-prefix/src/harfbuzz-populate-stamp/harfbuzz-populate-update.rule

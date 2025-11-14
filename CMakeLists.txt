@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.20)
 project(ImBored)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -22,6 +22,7 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs")
 set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs")
 set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "Build the GLFW documentation")
 set(GLFW_INSTALL OFF CACHE INTERNAL "Generate installation target")
+set(GLFW_BUILD_WAYLAND OFF CACHE INTERNAL "Build support for Wayland")
 FetchContent_MakeAvailable(glfw)
 
 # ---- glad (manually included) ----
@@ -108,6 +109,11 @@ if (MSVC)
 endif ()
 
 # ---- Link ----
+# Find X11 for Linux
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+endif()
+
 target_link_libraries(ImBored PRIVATE
         glfw
         glad
@@ -116,6 +122,11 @@ target_link_libraries(ImBored PRIVATE
         imbored_rendering
         imbored_ui
 )
+
+# Link X11 on Linux
+if(UNIX AND NOT APPLE AND X11_FOUND)
+    target_link_libraries(ImBored PRIVATE ${X11_LIBRARIES})
+endif()
 
 # ---- Copy Resources ----
 add_custom_command(TARGET ImBored POST_BUILD

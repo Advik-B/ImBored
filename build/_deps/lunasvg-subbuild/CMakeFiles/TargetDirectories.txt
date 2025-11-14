@@ -1,0 +1,3 @@
+/home/runner/work/ImBored/ImBored/build/_deps/lunasvg-subbuild/CMakeFiles/lunasvg-populate.dir
+/home/runner/work/ImBored/ImBored/build/_deps/lunasvg-subbuild/CMakeFiles/edit_cache.dir
+/home/runner/work/ImBored/ImBored/build/_deps/lunasvg-subbuild/CMakeFiles/rebuild_cache.dir
