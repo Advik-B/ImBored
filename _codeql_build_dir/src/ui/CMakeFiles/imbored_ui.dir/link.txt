@@ -1,2 +1,0 @@
-/usr/bin/ar qc libimbored_ui.a CMakeFiles/imbored_ui.dir/font_manager.cpp.o
-/usr/bin/ranlib libimbored_ui.a

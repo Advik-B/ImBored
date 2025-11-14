@@ -1,2 +1,0 @@
-/usr/bin/ar qc libimbored_rendering.a CMakeFiles/imbored_rendering.dir/renderer.cpp.o
-/usr/bin/ranlib libimbored_rendering.a

@@ -1,2 +1,0 @@
-/usr/bin/ar qc libimbored_core.a CMakeFiles/imbored_core.dir/window.cpp.o
-/usr/bin/ranlib libimbored_core.a
