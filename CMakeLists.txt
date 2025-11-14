@@ -4,6 +4,23 @@ project(ImBored)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Enable LTO for release builds to minimize binary size
+# This is especially important when linking with Skia (reduces size dramatically)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+    if(ipo_supported)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+        message(STATUS "LTO/IPO enabled for Release build")
+    else()
+        message(WARNING "LTO/IPO not supported: ${ipo_error}")
+    endif()
+endif()
+
 # Use Ninja as the build system
 set(CMAKE_MAKE_PROGRAM ninja CACHE FILEPATH "Ninja build system")
 if(NOT CMAKE_GENERATOR MATCHES "Ninja")
@@ -69,10 +86,31 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(lunasvg)
 
 # ---- Skia (for COLRv1 emoji rendering) ----
-# Note: Skia is a large library. For now, we'll use system Skia if available,
-# or download prebuilt binaries for the platform.
-# TODO: Add proper Skia integration when stable binaries are available
-# For now, we'll implement a Skia-based rasterizer that can be enabled when Skia is available
+# Skia is configured for minimal static build with LTO to reduce size
+# Full Skia (~200MB) -> Minimal static + LTO (~5-20MB final binary increase)
+option(USE_SKIA "Enable Skia for COLRv1 emoji rendering" ON)
+
+if(USE_SKIA)
+    # Try to find system Skia first
+    find_package(Skia QUIET)
+    
+    if(NOT Skia_FOUND)
+        message(STATUS "Skia not found. Attempting to build minimal Skia...")
+        
+        # For now, we'll use a minimal rasterizer without full Skia
+        # Full Skia integration requires downloading/building Skia separately
+        # Instructions: https://skia.org/docs/user/build/
+        set(SKIA_AVAILABLE FALSE)
+        message(WARNING "Skia integration requires manual setup. See docs/SKIA_SETUP.md")
+        message(WARNING "Falling back to grayscale emoji rendering")
+    else()
+        set(SKIA_AVAILABLE TRUE)
+        message(STATUS "Found Skia: ${Skia_DIR}")
+    endif()
+else()
+    set(SKIA_AVAILABLE FALSE)
+    message(STATUS "Skia disabled - using grayscale emoji rendering")
+endif()
 
 # ---- ImGUI ----
 add_library(

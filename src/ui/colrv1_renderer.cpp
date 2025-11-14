@@ -9,16 +9,54 @@
 #include FT_COLOR_H
 #include FT_GLYPH_H
 
+#ifdef SKIA_AVAILABLE
+#include <include/core/SkCanvas.h>
+#include <include/core/SkSurface.h>
+#include <include/core/SkPaint.h>
+#include <include/core/SkPath.h>
+#include <include/core/SkImageInfo.h>
+#include <include/core/SkColor.h>
+#endif
+
 namespace ImBored::UI {
 
 COLRv1Renderer::COLRv1Renderer(int width, int height)
     : m_width(width)
     , m_height(height)
+#ifdef SKIA_AVAILABLE
+    , m_surface(nullptr)
+    , m_canvas(nullptr)
+#endif
 {
     m_buffer.resize(width * height * 4, 0);
+    
+#ifdef SKIA_AVAILABLE
+    // Create Skia surface for rendering
+    SkImageInfo info = SkImageInfo::MakeN32Premul(width, height);
+    m_surface = SkSurface::MakeRaster(info).release();
+    if (m_surface) {
+        m_canvas = m_surface->getCanvas();
+        std::cout << "COLRv1Renderer: Skia rendering enabled\n";
+    } else {
+        std::cerr << "COLRv1Renderer: Failed to create Skia surface, using fallback\n";
+    }
+#endif
 }
 
 COLRv1Renderer::~COLRv1Renderer() {
+#ifdef SKIA_AVAILABLE
+    if (m_surface) {
+        delete m_surface;
+    }
+#endif
+}
+
+bool COLRv1Renderer::isSkiaAvailable() {
+#ifdef SKIA_AVAILABLE
+    return true;
+#else
+    return false;
+#endif
 }
 
 void COLRv1Renderer::clear() {
@@ -103,6 +141,14 @@ bool COLRv1Renderer::renderGlyph(void* ftFace, uint32_t glyphIndex, uint32_t cod
     // Clear buffer
     clear();
     
+#ifdef SKIA_AVAILABLE
+    // Try Skia rendering first if available
+    if (m_canvas && renderWithSkia(ftFace, glyphIndex, codepoint)) {
+        return true;
+    }
+#endif
+    
+    // Fallback to basic COLR v0 rendering
     // Try COLR v0 first (layered rendering)
     FT_LayerIterator iterator;
     iterator.p = nullptr;
@@ -138,18 +184,24 @@ bool COLRv1Renderer::renderGlyph(void* ftFace, uint32_t glyphIndex, uint32_t cod
     }
     
     // For COLRv1 or no color layers: render the base glyph in grayscale
-    // COLRv1 requires complex paint rendering that's not yet fully supported in FreeType 2.14
-    // For now, we render the outline to at least show something
+    // COLRv1 requires complex paint rendering with Skia
     uint8_t r = 128, g = 128, b = 128, a = 255;
     bool rendered = renderPaintLayer(ftFace, glyphIndex, r, g, b, a);
     
-    // If still nothing rendered, this glyph truly has no renderable data
-    if (!rendered) {
-        std::cerr << "COLRv1Renderer: Failed to render glyph " << glyphIndex << " (codepoint 0x" 
-                  << std::hex << codepoint << std::dec << ")\n";
-    }
-    
     return rendered;
 }
+
+#ifdef SKIA_AVAILABLE
+bool COLRv1Renderer::renderWithSkia(void* ftFace, uint32_t glyphIndex, uint32_t codepoint) {
+    // This is a placeholder for full Skia-based COLRv1 rendering
+    // Full implementation requires parsing COLRv1 paint tables and
+    // rendering them using Skia's SkCanvas API
+    
+    // TODO: Implement COLRv1 paint table parsing and Skia rendering
+    // For now, return false to use fallback
+    
+    return false;
+}
+#endif
 
 } // namespace ImBored::UI
