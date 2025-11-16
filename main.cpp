@@ -1,6 +1,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <chrono>
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -9,9 +10,12 @@
 
 #include "include/core/window.hpp"
 #include "include/rendering/renderer.hpp"
+#include "include/ui/emoji_manager.hpp"
+#include "include/ui/smart_text.hpp"
 
 using namespace ImBored::Core;
 using namespace ImBored::Rendering;
+using namespace ImBored::UI;
 
 int main() {
     try {
@@ -47,41 +51,44 @@ int main() {
         std::cout << glGetString(GL_VERSION) << "\n";
         ImGui_ImplOpenGL3_Init("#version 330 core");
         
-        // Load fonts with FreeType - Main font
+        // Load fonts with FreeType - Main font only (no emoji font merging)
         std::cout << "DEBUG: Loading main font...\n";
+        auto font_start = std::chrono::high_resolution_clock::now();
+        
         ImFontConfig config;
         config.FontDataOwnedByAtlas = false;
-        config.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor;
         
         ImFont* mainFont = io.Fonts->AddFontFromFileTTF("resources/Quicksand-Regular.ttf", 18.0f, &config);
         std::cout << "DEBUG: Main font loaded\n";
         
-        // Load colored emoji font with optimized emoji ranges
-        // Reduced ranges to avoid CPU spike during font atlas build
-        // No variation selectors (0xFE00-0xFE0F) as they cause rendering issues
-        static const ImWchar emoji_ranges[] = {
-            0x1F300, 0x1F9FF, // Emoticons, symbols, pictographs, etc.
-            0x2600,  0x27BF,  // Miscellaneous symbols
-            0x2700,  0x27EF,  // Dingbats
-            0,
-        };
-        
-        ImFontConfig emojiConfig;
-        emojiConfig.FontDataOwnedByAtlas = false;
-        emojiConfig.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeLoaderFlags_Bitmap;
-        emojiConfig.MergeMode = true;
-        emojiConfig.PixelSnapH = false; // Better for emoji rendering
-        emojiConfig.RasterizerMultiply = 1.5f; // Better color rendering
-        
-        std::cout << "DEBUG: Adding emoji font...\n";
-        io.Fonts->AddFontFromFileTTF("resources/NotoColorEmoji-Regular.ttf", 18.0f, &emojiConfig, emoji_ranges);
-        
+        // Build font atlas (no emoji glyphs)
         std::cout << "DEBUG: Building font atlas...\n";
+        auto atlas_start = std::chrono::high_resolution_clock::now();
         io.Fonts->Build();
-        std::cout << "DEBUG: Font atlas built successfully\n";
+        auto atlas_end = std::chrono::high_resolution_clock::now();
+        auto atlas_duration = std::chrono::duration_cast<std::chrono::milliseconds>(atlas_end - atlas_start);
+        auto font_duration = std::chrono::duration_cast<std::chrono::milliseconds>(atlas_end - font_start);
+        
+        std::cout << "DEBUG: Font atlas built successfully in " << atlas_duration.count() << "ms\n";
+        std::cout << "DEBUG: Total font loading time: " << font_duration.count() << "ms\n";
         
         if (mainFont) {
             io.FontDefault = mainFont;
+        }
+        
+        // Initialize emoji manager for SVG-based emoji rendering
+        std::cout << "DEBUG: Initializing emoji manager...\n";
+        auto emoji_start = std::chrono::high_resolution_clock::now();
+        EmojiManager emojiManager;
+        bool emojiSuccess = emojiManager.initialize("resources/NotoColorEmoji-Regular.ttf", 18.0f);
+        auto emoji_end = std::chrono::high_resolution_clock::now();
+        auto emoji_duration = std::chrono::duration_cast<std::chrono::milliseconds>(emoji_end - emoji_start);
+        
+        if (emojiSuccess) {
+            std::cout << "DEBUG: Emoji manager initialized in " << emoji_duration.count() << "ms\n";
+            SmartTextInit(&emojiManager);
+        } else {
+            std::cerr << "WARNING: Failed to initialize emoji manager\n";
         }
         
         // Initialize renderer
@@ -101,18 +108,24 @@ int main() {
             ImGui::Separator();
             
             // Colour Emoji Support Section
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.5f, 1.0f), "COLOUR EMOJI SUPPORT");
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.5f, 1.0f), "COLOUR EMOJI SUPPORT (SVG-based)");
             ImGui::Spacing();
-            ImGui::Text("Smileys & Emotion: 😀 😃 😄 😁 😆 😅 🤣 😂 😉 😊 😇 🙂 🙃 😌 😍 🥰");
-            ImGui::Text("Hand Gestures: 👋 👏 🙌 👐 🤲 🤝 👂 👃 👀 👁 🧠 👅 👄");
-            ImGui::Text("Animals: 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷");
-            ImGui::Text("Food: 🍕 🍔 🍟 🌭 🌮 🌯 🍿 🥓 🥞 🍗 🍖 🍝 🍜 🍲");
-            ImGui::Text("Travel: 🚗 🚕 🚙 🚌 🚎 🏎 🚓 🚑 🚒 🚐 🛻 🚚 🚛 ✈️ 🚁 🚂 🚃 🚄");
-            ImGui::Text("Sports: ⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🥏 🎱 🎳 🏓 🏸 🥊 🥋");
-            ImGui::Text("Symbols: ❤️ 💔 💕 💖 💗 💙 💚 💛 🖤 🤍 🤎 💝 💞");
-            ImGui::Text("Nature: ☀️ 🌤️ ⛅ 🌥️ ☁️ 🌦️ 🌧️ ⛈️ 🌩️ 🌨️ ❄️ ☃️ ⚡ 🌈");
+            
+            if (emojiSuccess) {
+                SmartText("Smileys & Emotion: 😀 😃 😄 😁 😆 😅 🤣 😂 😉 😊 😇 🙂 🙃 😌 😍 🥰");
+                SmartText("Hand Gestures: 👋 👏 🙌 👐 🤲 🤝 👂 👃 👀 👁 🧠 👅 👄");
+                SmartText("Animals: 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷");
+                SmartText("Food: 🍕 🍔 🍟 🌭 🌮 🌯 🍿 🥓 🥞 🍗 🍖 🍝 🍜 🍲");
+                SmartText("Travel: 🚗 🚕 🚙 🚌 🚎 🏎 🚓 🚑 🚒 🚐 🛻 🚚 🚛 ✈️ 🚁 🚂 🚃 🚄");
+                SmartText("Sports: ⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🥏 🎱 🎳 🏓 🏸 🥊 🥋");
+                SmartText("Symbols: ❤️ 💔 💕 💖 💗 💙 💚 💛 🖤 🤍 🤎 💝 💞");
+                SmartText("Nature: ☀️ 🌤️ ⛅ 🌥️ ☁️ 🌦️ 🌧️ ⛈️ 🌩️ 🌨️ ❄️ ☃️ ⚡ 🌈");
+            } else {
+                ImGui::Text("Emoji manager failed to initialize");
+            }
+            
             ImGui::Spacing();
-            ImGui::Text("Rendered using NotoColorEmoji-Regular.ttf with FreeType support");
+            ImGui::Text("Rendered using SVG extraction from NotoColorEmoji-Regular.ttf");
             ImGui::End();
 
             ImGui::ShowDemoWindow();

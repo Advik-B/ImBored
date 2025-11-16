@@ -1,8 +1,25 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.20)
 project(ImBored)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# Enable LTO for release builds to minimize binary size
+# This is especially important when linking with Skia (reduces size dramatically)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+    if(ipo_supported)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+        message(STATUS "LTO/IPO enabled for Release build")
+    else()
+        message(WARNING "LTO/IPO not supported: ${ipo_error}")
+    endif()
+endif()
 
 # Use Ninja as the build system
 set(CMAKE_MAKE_PROGRAM ninja CACHE FILEPATH "Ninja build system")
@@ -22,6 +39,7 @@ set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs")
 set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs")
 set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "Build the GLFW documentation")
 set(GLFW_INSTALL OFF CACHE INTERNAL "Generate installation target")
+set(GLFW_BUILD_WAYLAND OFF CACHE INTERNAL "Build support for Wayland")
 FetchContent_MakeAvailable(glfw)
 
 # ---- glad (manually included) ----
@@ -53,6 +71,10 @@ FetchContent_Declare(
         GIT_TAG VER-2-14-1
 )
 set(FT_DISABLE_HARFBUZZ OFF CACHE BOOL "" FORCE)
+set(FT_REQUIRE_ZLIB ON CACHE BOOL "" FORCE)
+set(FT_REQUIRE_PNG ON CACHE BOOL "" FORCE)
+# Enable COLR/CPAL support for color emoji rendering
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(freetype)
 
 # ---- LunaSVG (for SVG emoji support) ----
@@ -62,6 +84,30 @@ FetchContent_Declare(
         GIT_TAG master
 )
 FetchContent_MakeAvailable(lunasvg)
+
+# ---- Skia (for COLRv1 emoji rendering) ----
+# Skia is configured for minimal static build with LTO to reduce size
+# Full Skia (~200MB) -> Minimal static + LTO (~5-20MB final binary increase)
+option(USE_SKIA "Enable Skia for COLRv1 emoji rendering" ON)
+
+if(USE_SKIA)
+    # Check if Skia library exists in thirdparty/skia
+    if(EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/skia/lib/libskia.a")
+        set(SKIA_AVAILABLE TRUE)
+        set(SKIA_LIBRARY "${CMAKE_SOURCE_DIR}/thirdparty/skia/lib/libskia.a")
+        set(SKIA_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/thirdparty/skia/include")
+        message(STATUS "Found Skia library: ${SKIA_LIBRARY}")
+        message(STATUS "Skia enabled - full COLRv1 emoji rendering available")
+    else()
+        set(SKIA_AVAILABLE FALSE)
+        message(WARNING "Skia library not found at thirdparty/skia/lib/libskia.a")
+        message(WARNING "Build Skia from source and place it there. See docs/SKIA_SETUP.md")
+        message(WARNING "Falling back to PNG/CBDT + grayscale emoji rendering")
+    endif()
+else()
+    set(SKIA_AVAILABLE FALSE)
+    message(STATUS "Skia disabled - using PNG/CBDT + grayscale emoji rendering")
+endif()
 
 # ---- ImGUI ----
 add_library(
@@ -108,6 +154,11 @@ if (MSVC)
 endif ()
 
 # ---- Link ----
+# Find X11 for Linux
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+endif()
+
 target_link_libraries(ImBored PRIVATE
         glfw
         glad
@@ -116,6 +167,11 @@ target_link_libraries(ImBored PRIVATE
         imbored_rendering
         imbored_ui
 )
+
+# Link X11 on Linux
+if(UNIX AND NOT APPLE AND X11_FOUND)
+    target_link_libraries(ImBored PRIVATE ${X11_LIBRARIES})
+endif()
 
 # ---- Copy Resources ----
 add_custom_command(TARGET ImBored POST_BUILD
