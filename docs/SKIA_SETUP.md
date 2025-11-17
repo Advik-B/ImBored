@@ -1,10 +1,34 @@
-# Skia Setup for COLRv1 Emoji Rendering
+# Skia Setup for COLRv1 Emoji Rendering (OPTIONAL)
+
+**Note: Skia is completely optional. The project works fine without it, using PNG/bitmap emoji instead.**
 
 This document explains how to build and integrate Skia for full-color COLRv1 emoji support.
 
-## Why Skia?
+## Is Skia Required?
 
-NotoColorEmoji uses COLRv1 format which requires paint rendering (gradients, transforms, compositing).
+**No.** Skia is an optional enhancement that provides:
+- Advanced COLRv1 emoji rendering with gradients and transforms
+- Support for the latest NotoColorEmoji format
+
+Without Skia, the project falls back to:
+- PNG/bitmap emoji (still provides color emoji)
+- CBDT format emoji
+- Grayscale emoji as final fallback
+
+**Most users can skip Skia setup** and use the default emoji rendering.
+
+## Why Skia Cannot Be FetchContent'd
+
+Skia uses Google's GN (Generate Ninja) build system, not CMake. It has a complex build process that:
+- Requires depot_tools and custom Python scripts
+- Takes 30+ minutes to build from source
+- Produces a ~200MB library (though it can be optimized to 5-20MB)
+
+Due to these constraints, Skia must be built separately and manually placed in the project.
+
+## Why Use Skia?
+
+NotoColorEmoji's COLRv1 format requires paint rendering (gradients, transforms, compositing).
 Skia provides the necessary graphics primitives to render these complex emoji glyphs.
 
 ## Size Optimization
