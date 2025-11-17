@@ -15,37 +15,50 @@ endif()
 message(STATUS "Setting up Skia with FetchContent (prebuilt binaries)...")
 
 # Detect platform and architecture
+# Platform names for JetBrains skia-pack: linux, macos, windows
+# Architecture: x64, arm64
+# Format: ${PLATFORM}-${BUILD_TYPE}-${ARCH}
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(SKIA_OS "linux")
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
-        set(SKIA_PLATFORM "linux-x64")
+        set(SKIA_ARCH "x64")
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-        set(SKIA_PLATFORM "linux-arm64")
+        set(SKIA_ARCH "arm64")
     else()
         message(WARNING "Unsupported Linux architecture: ${CMAKE_SYSTEM_PROCESSOR}")
         return()
     endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(SKIA_OS "macos")
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-        set(SKIA_PLATFORM "macos-arm64")
+        set(SKIA_ARCH "arm64")
     else()
-        set(SKIA_PLATFORM "macos-x64")
+        set(SKIA_ARCH "x64")
     endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(SKIA_PLATFORM "windows-x64")
+    set(SKIA_OS "windows")
+    set(SKIA_ARCH "x64")
 else()
     message(WARNING "Unsupported platform: ${CMAKE_SYSTEM_NAME}")
     return()
 endif()
 
-message(STATUS "Detected platform: ${SKIA_PLATFORM}")
+message(STATUS "Detected platform: ${SKIA_OS}-${SKIA_ARCH}")
 
 # Allow user to specify custom Skia URL
 # This can be set via -DSKIA_PREBUILT_URL=<url> to use a custom prebuilt package
 if(NOT DEFINED SKIA_PREBUILT_URL)
-    # Try JetBrains Skia-pack first (commonly used, well-maintained)
+    # Use JetBrains Skia-pack (commonly used, well-maintained)
     # https://github.com/JetBrains/skia-pack
-    set(SKIA_VERSION "m126")
-    set(SKIA_URL "https://github.com/JetBrains/skia-pack/releases/download/${SKIA_VERSION}/Skia-${SKIA_VERSION}-${SKIA_PLATFORM}-Release.zip")
+    
+    # Version format: m<milestone>-<commit>-<build>
+    # Using a stable m126 release
+    set(SKIA_VERSION "m126-6fd3120c1b-1")
+    set(SKIA_BUILD_TYPE "Release")  # or "Debug"
+    
+    # Construct the filename: Skia-{version}-{os}-{buildtype}-{arch}.zip
+    set(SKIA_FILENAME "Skia-${SKIA_VERSION}-${SKIA_OS}-${SKIA_BUILD_TYPE}-${SKIA_ARCH}.zip")
+    set(SKIA_URL "https://github.com/JetBrains/skia-pack/releases/download/${SKIA_VERSION}/${SKIA_FILENAME}")
 else()
     set(SKIA_URL "${SKIA_PREBUILT_URL}")
     message(STATUS "Using custom Skia URL: ${SKIA_URL}")
@@ -82,6 +95,7 @@ endif()
 # Different prebuilt packages may have different directory structures
 # We'll check common locations
 set(SKIA_LIB_PATHS
+    "${skia_SOURCE_DIR}/out/Release-${SKIA_OS}-${SKIA_ARCH}/libskia.a"
     "${skia_SOURCE_DIR}/out/Release-x64/libskia.a"
     "${skia_SOURCE_DIR}/out/Release/libskia.a"
     "${skia_SOURCE_DIR}/out/Static/libskia.a"
@@ -89,6 +103,7 @@ set(SKIA_LIB_PATHS
     "${skia_SOURCE_DIR}/libskia.a"
     "${skia_SOURCE_DIR}/skia.lib"
     "${skia_SOURCE_DIR}/out/Release-x64/skia.lib"
+    "${skia_SOURCE_DIR}/out/Release-${SKIA_OS}-${SKIA_ARCH}/skia.lib"
 )
 
 set(SKIA_LIB_FOUND FALSE)
