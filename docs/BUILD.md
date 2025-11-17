@@ -54,7 +54,7 @@ These cannot be "fetched" via CMake because they're part of the operating system
 
 ## Dependencies Managed by FetchContent
 
-The following libraries are automatically downloaded and built:
+The following libraries are automatically downloaded and built by CMake:
 
 - **GLFW 3.4**: Windowing and input handling
 - **FreeType 2.14.1**: Font rendering with emoji support
@@ -63,6 +63,19 @@ The following libraries are automatically downloaded and built:
 - **zlib 1.3.1**: Compression library (required by libpng)
 - **LunaSVG**: SVG rendering (for SVG emoji)
 - **glad**: OpenGL loader
+
+## Optional Dependencies
+
+### Skia (Advanced Emoji Rendering)
+
+**Skia is completely optional** and provides advanced COLRv1 emoji rendering with gradients. The project works perfectly fine without it, using PNG/bitmap emoji instead.
+
+Skia cannot be FetchContent'd because it uses Google's GN build system and has a complex build process. If you want to enable Skia support, see [SKIA_SETUP.md](SKIA_SETUP.md).
+
+To disable Skia warnings during build:
+```bash
+cmake -B build -S . -DUSE_SKIA=OFF
+```
 
 ## Building
 
@@ -79,15 +92,19 @@ cmake --build build
 
 ### Build Options
 
-#### Disable Skia (Optional)
+#### Skia Support
 
-Skia is used for COLRv1 emoji rendering but is optional:
+By default, CMake will look for Skia but won't fail if it's not found:
 
 ```bash
+# Explicitly disable Skia (suppresses "not found" messages)
 cmake -B build -S . -DUSE_SKIA=OFF
+
+# Enable Skia (default, will use if found in thirdparty/skia/)
+cmake -B build -S . -DUSE_SKIA=ON
 ```
 
-See [SKIA_SETUP.md](SKIA_SETUP.md) for Skia installation instructions.
+See [SKIA_SETUP.md](SKIA_SETUP.md) for Skia build and installation instructions if you want advanced COLRv1 emoji rendering.
 
 #### Build Type
 

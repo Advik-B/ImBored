@@ -153,9 +153,15 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(lunasvg)
 
 # ---- Skia (for COLRv1 emoji rendering) ----
-# Skia is configured for minimal static build with LTO to reduce size
+# Skia is OPTIONAL and provides advanced COLRv1 emoji rendering with gradients.
+# Skia uses GN build system (not CMake) and cannot be easily integrated via FetchContent.
+# The project works fine without Skia, falling back to PNG/bitmap emoji.
+#
+# To use Skia: Build it separately and place libskia.a in thirdparty/skia/lib/
+# See docs/SKIA_SETUP.md for detailed build instructions.
+# Skia is configured for minimal static build with LTO to reduce size:
 # Full Skia (~200MB) -> Minimal static + LTO (~5-20MB final binary increase)
-option(USE_SKIA "Enable Skia for COLRv1 emoji rendering" ON)
+option(USE_SKIA "Enable Skia for COLRv1 emoji rendering (optional)" ON)
 
 if(USE_SKIA)
     # Check if Skia library exists in thirdparty/skia
@@ -167,9 +173,10 @@ if(USE_SKIA)
         message(STATUS "Skia enabled - full COLRv1 emoji rendering available")
     else()
         set(SKIA_AVAILABLE FALSE)
-        message(WARNING "Skia library not found at thirdparty/skia/lib/libskia.a")
-        message(WARNING "Build Skia from source and place it there. See docs/SKIA_SETUP.md")
-        message(WARNING "Falling back to PNG/CBDT + grayscale emoji rendering")
+        message(STATUS "Skia library not found at thirdparty/skia/lib/libskia.a")
+        message(STATUS "Skia is optional - project will work without it")
+        message(STATUS "To enable: Build Skia and place it in thirdparty/skia/. See docs/SKIA_SETUP.md")
+        message(STATUS "Falling back to PNG/CBDT + grayscale emoji rendering")
     endif()
 else()
     set(SKIA_AVAILABLE FALSE)
