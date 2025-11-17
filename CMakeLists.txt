@@ -51,18 +51,66 @@ add_library(
 )
 target_include_directories(glad PUBLIC thirdparty/glad/include)
 
-# ---- HarfBuzz ----
-find_package(harfbuzz CONFIG QUIET)
-if(NOT harfbuzz_FOUND)
-    FetchContent_Declare(
-            harfbuzz
-            GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
-            GIT_TAG 8.3.0
-    )
-    set(HB_BUILD_INTROSPECTION OFF CACHE BOOL "" FORCE)
-    set(HB_HAVE_GRAPHITE2 OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(harfbuzz)
+# ---- ZLIB ----
+FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG v1.3.1
+)
+set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(zlib)
+set(SKIP_INSTALL_ALL OFF CACHE BOOL "" FORCE)
+
+# Set ZLIB variables for FreeType to find
+set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
+set(ZLIB_LIBRARY zlibstatic CACHE STRING "" FORCE)
+set(ZLIB_INCLUDE_DIR "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}" CACHE STRING "" FORCE)
+set(ZLIB_LIBRARIES zlibstatic CACHE STRING "" FORCE)
+
+# Create ZLIB::ZLIB alias target if it doesn't exist
+if(NOT TARGET ZLIB::ZLIB)
+    add_library(ZLIB::ZLIB ALIAS zlibstatic)
 endif()
+
+# ---- PNG ----
+FetchContent_Declare(
+        libpng
+        GIT_REPOSITORY https://github.com/glennrp/libpng.git
+        GIT_TAG v1.6.43
+)
+set(PNG_SHARED OFF CACHE BOOL "" FORCE)
+set(PNG_STATIC ON CACHE BOOL "" FORCE)
+set(PNG_TESTS OFF CACHE BOOL "" FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(libpng)
+set(SKIP_INSTALL_ALL OFF CACHE BOOL "" FORCE)
+
+# Set PNG variables for FreeType to find
+set(PNG_FOUND TRUE CACHE BOOL "" FORCE)
+set(PNG_LIBRARY png_static CACHE STRING "" FORCE)
+set(PNG_PNG_INCLUDE_DIR "${libpng_SOURCE_DIR};${libpng_BINARY_DIR}" CACHE STRING "" FORCE)
+set(PNG_LIBRARIES png_static CACHE STRING "" FORCE)
+
+# png_static already includes the necessary include directories, just create the alias
+if(NOT TARGET PNG::PNG)
+    add_library(PNG::PNG ALIAS png_static)
+endif()
+
+# Make sure png_static has the binary dir in its include directories for pnglibconf.h
+target_include_directories(png_static PUBLIC 
+    $<BUILD_INTERFACE:${libpng_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${libpng_BINARY_DIR}>
+)
+
+# ---- HarfBuzz ----
+FetchContent_Declare(
+        harfbuzz
+        GIT_REPOSITORY https://github.com/harfbuzz/harfbuzz.git
+        GIT_TAG 8.3.0
+)
+set(HB_BUILD_INTROSPECTION OFF CACHE BOOL "" FORCE)
+set(HB_HAVE_GRAPHITE2 OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(harfbuzz)
 
 # ---- FreeType ----
 FetchContent_Declare(
@@ -75,7 +123,10 @@ set(FT_REQUIRE_ZLIB ON CACHE BOOL "" FORCE)
 set(FT_REQUIRE_PNG ON CACHE BOOL "" FORCE)
 # Enable COLR/CPAL support for color emoji rendering
 set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+# Disable installation to avoid export issues
+set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(freetype)
+set(SKIP_INSTALL_ALL OFF CACHE BOOL "" FORCE)
 
 # ---- LunaSVG (for SVG emoji support) ----
 FetchContent_Declare(
@@ -127,6 +178,13 @@ target_include_directories(imgui PUBLIC thirdparty/imgui/backends)
 target_include_directories(imgui PUBLIC thirdparty/imgui/misc/freetype)
 target_link_libraries(imgui PUBLIC freetype harfbuzz glfw lunasvg)
 
+# ImGui's GLFW backend uses X11 functions directly on Linux, so we need to link X11
+# X11 is a system library that cannot be fetched via FetchContent
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+    target_link_libraries(imgui PRIVATE ${X11_LIBRARIES})
+endif()
+
 # ---- Modules ----
 add_subdirectory(src)
 
@@ -154,11 +212,7 @@ if (MSVC)
 endif ()
 
 # ---- Link ----
-# Find X11 for Linux
-if(UNIX AND NOT APPLE)
-    find_package(X11 REQUIRED)
-endif()
-
+# GLFW handles X11 dependencies internally on Linux
 target_link_libraries(ImBored PRIVATE
         glfw
         glad
@@ -167,11 +221,6 @@ target_link_libraries(ImBored PRIVATE
         imbored_rendering
         imbored_ui
 )
-
-# Link X11 on Linux
-if(UNIX AND NOT APPLE AND X11_FOUND)
-    target_link_libraries(ImBored PRIVATE ${X11_LIBRARIES})
-endif()
 
 # ---- Copy Resources ----
 add_custom_command(TARGET ImBored POST_BUILD
