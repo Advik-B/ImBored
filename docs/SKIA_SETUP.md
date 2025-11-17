@@ -2,45 +2,82 @@
 
 **Note: Skia is completely optional. The project works fine without it, using PNG/bitmap emoji instead.**
 
-This document explains how to build and integrate Skia for full-color COLRv1 emoji support.
+## Automatic Setup (Recommended)
 
-## Is Skia Required?
+**Skia is now automatically downloaded and integrated via CMake FetchContent!**
 
-**No.** Skia is an optional enhancement that provides:
-- Advanced COLRv1 emoji rendering with gradients and transforms
-- Support for the latest NotoColorEmoji format
+Simply build the project with Skia enabled (default):
 
-Without Skia, the project falls back to:
-- PNG/bitmap emoji (still provides color emoji)
-- CBDT format emoji
-- Grayscale emoji as final fallback
+```bash
+cmake -B build -G Ninja
+cmake --build build
+```
 
-**Most users can skip Skia setup** and use the default emoji rendering.
+That's it! CMake will:
+1. Detect your platform (Linux/macOS/Windows, x64/arm64)
+2. Download prebuilt Skia binaries (~60MB) from JetBrains skia-pack
+3. Configure and link Skia automatically
 
-## Why Skia Cannot Be FetchContent'd
+### Disable Skia (Optional)
 
-Skia uses Google's GN (Generate Ninja) build system, not CMake. It has a complex build process that:
-- Requires depot_tools and custom Python scripts
-- Takes 30+ minutes to build from source
-- Produces a ~200MB library (though it can be optimized to 5-20MB)
+To build without Skia and reduce binary size:
 
-Due to these constraints, Skia must be built separately and manually placed in the project.
+```bash
+cmake -B build -G Ninja -DUSE_SKIA=OFF
+cmake --build build
+```
 
-## Why Use Skia?
+### Use Custom Skia Prebuilts
+
+To use your own prebuilt Skia package:
+
+```bash
+cmake -B build -G Ninja -DSKIA_PREBUILT_URL="https://your-url.com/skia.zip"
+cmake --build build
+```
+
+## What is Skia?
+
+Skia is a 2D graphics library that provides advanced rendering capabilities.
+
+### Why Use Skia?
 
 NotoColorEmoji's COLRv1 format requires paint rendering (gradients, transforms, compositing).
 Skia provides the necessary graphics primitives to render these complex emoji glyphs.
 
-## Size Optimization
+**With Skia enabled:**
+- Advanced COLRv1 emoji rendering with gradients and transforms
+- Support for the latest NotoColorEmoji format
+- Full-color, high-quality emoji
 
-With proper configuration, Skia impact on binary size is minimal:
-- Full Skia library: ~200MB
-- Minimal static build: ~40-70MB  
-- **Minimal + LTO + dead code elimination: 5-20MB** ✅
+**Without Skia:**
+- PNG/bitmap emoji (still provides color emoji)
+- CBDT format emoji
+- Grayscale emoji as final fallback
+- Smaller binary size
 
-## Build Instructions
+**Most users can use the default (Skia enabled)** for the best emoji experience.
 
-### Option 1: Minimal Skia Build (Recommended)
+## Binary Size Impact
+
+With LTO optimization enabled in Release mode:
+- **Without Skia:** ~2.3 MB
+- **With Skia (automated):** ~3.4 MB
+- **Size increase:** ~1.1 MB (thanks to LTO and dead code elimination)
+
+The automated FetchContent approach downloads JetBrains' optimized Skia builds which are
+already configured for minimal size while maintaining COLRv1 rendering capabilities.
+
+---
+
+## Manual Build (Advanced Users Only)
+
+**Note: This is no longer necessary with FetchContent integration. Only do this if you need
+a custom Skia configuration with different build flags or a specific version.**
+
+### Building Skia from Source
+
+If you need custom build options not available in prebuilt binaries:
 
 ```bash
 # Clone Skia
@@ -72,84 +109,63 @@ bin/gn gen out/Static --args='
 # Build
 ninja -C out/Static
 
-# Install to system or ImBored/thirdparty/skia
-sudo cp out/Static/libskia.a /usr/local/lib/
-sudo cp -r include/* /usr/local/include/skia/
+# Package it as a zip and use with SKIA_PREBUILT_URL
+cd out/Static
+zip -r custom-skia.zip libskia.a ../../include
 ```
 
-### Option 2: Use Prebuilt Skia
-
-Download minimal prebuilt binaries from https://github.com/google/skia/releases
-
-### Option 3: System Package (if available)
+Then use it in your build:
 
 ```bash
-# Some distributions provide Skia packages
-sudo apt-get install libskia-dev  # Debian/Ubuntu (if available)
-```
-
-## CMake Integration
-
-Once Skia is installed:
-
-```bash
-cd ImBored
-cmake -B build -S . -DUSE_SKIA=ON
+cmake -B build -G Ninja -DSKIA_PREBUILT_URL="file:///path/to/custom-skia.zip"
 cmake --build build
-```
-
-To disable Skia (fallback to grayscale):
-
-```bash
-cmake -B build -S . -DUSE_SKIA=OFF
-cmake --build build
-```
-
-## Verifying Integration
-
-After building, check for color emoji support:
-
-```bash
-./build/bin/ImBored
-# You should see "Sk
-
-ia-based COLRv1 rendering enabled" in the console
 ```
 
 ## Troubleshooting
 
-### Skia not found
-Ensure libskia.a and headers are in CMake search paths:
+### Download fails
+
+If the automatic download fails:
+1. Check your internet connection
+2. Try using a custom prebuilt URL: `-DSKIA_PREBUILT_URL=<url>`
+3. Or disable Skia: `-DUSE_SKIA=OFF`
+
+### Wrong platform detected
+
+The script auto-detects platform. If it's wrong, file an issue with your system details:
+- OS: `uname -s`
+- Architecture: `uname -m`
+
+### Binary size concerns
+
+Use Release build mode for LTO optimization:
 ```bash
-cmake -B build -S . -DSkia_DIR=/path/to/skia/cmake
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 ```
 
-### LTO issues
-If LTO causes linking problems, disable it:
+Strip debug symbols for even smaller size:
 ```bash
-# In Skia build args:
-extra_cflags=["-O3"]  # Remove -flto
-extra_ldflags=["-Wl,--gc-sections"]  # Remove -flto
+strip build/bin/ImBored
 ```
 
-### Large binary size
-Verify dead code elimination is working:
-```bash
-strip build/bin/ImBored  # Remove debug symbols
-ls -lh build/bin/ImBored  # Should be <50MB with full features
-```
+## Previous Manual Setup Method
 
-## Performance
+The old approach of manually building and placing Skia in `thirdparty/skia/` is deprecated
+but still supported for backward compatibility. The FetchContent approach is now the
+recommended and default method.
 
-With Skia integration:
-- Emoji atlas build time: ~50-100ms (one-time on startup)
-- Runtime performance: Negligible (uses pre-rendered texture atlas)
-- Memory: ~2-8MB for emoji texture atlas
+---
 
-## Alternative: Bitmap Emoji Font
+## Supported Platforms
 
-If Skia setup is too complex, consider using Twemoji or Apple Color Emoji (CBDT format):
-- No Skia dependency
-- Immediate color support
-- Slightly larger font files
-- No gradient/transform support (simple color bitmaps)
+The automated Skia setup supports:
+- **Linux:** x86_64, aarch64
+- **macOS:** x86_64, arm64 (Apple Silicon)
+- **Windows:** x86_64
+
+All platforms use JetBrains skia-pack prebuilt binaries (m126 release).
+
+## References
+
+- [JetBrains skia-pack releases](https://github.com/JetBrains/skia-pack/releases)
+- [Skia official documentation](https://skia.org/)

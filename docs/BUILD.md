@@ -18,8 +18,11 @@ sudo apt-get install -y \
     libxcursor-dev \
     libxi-dev \
     libgl1-mesa-dev \
-    libwayland-dev
+    libwayland-dev \
+    libfontconfig1-dev
 ```
+
+The `libfontconfig1-dev` package is required when Skia is enabled (default).
 
 ### Linux (Fedora/RHEL)
 
@@ -31,8 +34,11 @@ sudo dnf install -y \
     libXcursor-devel \
     libXi-devel \
     mesa-libGL-devel \
-    wayland-devel
+    wayland-devel \
+    fontconfig-devel
 ```
+
+The `fontconfig-devel` package is required when Skia is enabled (default).
 
 ### macOS
 
@@ -63,19 +69,27 @@ The following libraries are automatically downloaded and built by CMake:
 - **zlib 1.3.1**: Compression library (required by libpng)
 - **LunaSVG**: SVG rendering (for SVG emoji)
 - **glad**: OpenGL loader
+- **Skia m126** (optional): Advanced COLRv1 emoji rendering
 
-## Optional Dependencies
+## Optional: Skia for Advanced Emoji Rendering
 
-### Skia (Advanced Emoji Rendering)
+**Skia is now automatically downloaded and integrated via FetchContent!**
 
-**Skia is completely optional** and provides advanced COLRv1 emoji rendering with gradients. The project works perfectly fine without it, using PNG/bitmap emoji instead.
+Skia provides advanced COLRv1 emoji rendering with gradients and transforms. It is **enabled by default** and automatically downloaded (~60MB prebuilt binary) from JetBrains skia-pack.
 
-Skia cannot be FetchContent'd because it uses Google's GN build system and has a complex build process. If you want to enable Skia support, see [SKIA_SETUP.md](SKIA_SETUP.md).
-
-To disable Skia warnings during build:
+**To use Skia (default):**
 ```bash
-cmake -B build -S . -DUSE_SKIA=OFF
+cmake -G Ninja -B build -S .
+cmake --build build
 ```
+
+**To disable Skia** (reduces binary size by ~1MB):
+```bash
+cmake -G Ninja -B build -S . -DUSE_SKIA=OFF
+cmake --build build
+```
+
+Without Skia, the project uses PNG/bitmap emoji (still provides color emoji). See [SKIA_SETUP.md](SKIA_SETUP.md) for more details.
 
 ## Building
 
@@ -92,20 +106,6 @@ cmake --build build
 
 ### Build Options
 
-#### Skia Support
-
-By default, CMake will look for Skia but won't fail if it's not found:
-
-```bash
-# Explicitly disable Skia (suppresses "not found" messages)
-cmake -B build -S . -DUSE_SKIA=OFF
-
-# Enable Skia (default, will use if found in thirdparty/skia/)
-cmake -B build -S . -DUSE_SKIA=ON
-```
-
-See [SKIA_SETUP.md](SKIA_SETUP.md) for Skia build and installation instructions if you want advanced COLRv1 emoji rendering.
-
 #### Build Type
 
 ```bash
@@ -114,6 +114,20 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
 
 # Release build (default, with LTO optimization)
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+```
+
+#### Skia Support
+
+Skia is enabled by default and automatically downloaded. To disable it:
+
+```bash
+cmake -B build -S . -DUSE_SKIA=OFF
+```
+
+To use a custom Skia prebuilt package:
+
+```bash
+cmake -B build -S . -DSKIA_PREBUILT_URL="https://your-url.com/skia.zip"
 ```
 
 ## Troubleshooting
@@ -136,7 +150,11 @@ Install Wayland development libraries:
 
 ### Slow first build
 
-The first build will download and compile all dependencies (GLFW, FreeType, HarfBuzz, etc.). This can take 5-10 minutes. Subsequent builds will be much faster as dependencies are cached.
+The first build will download and compile all dependencies (GLFW, FreeType, HarfBuzz, Skia, etc.). 
+- **With Skia:** The first build downloads ~60MB of Skia prebuilts and can take 5-10 minutes
+- **Without Skia (`-DUSE_SKIA=OFF`):** Faster first build (3-5 minutes)
+
+Subsequent builds will be much faster as dependencies are cached.
 
 ## Clean Build
 
