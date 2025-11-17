@@ -154,33 +154,22 @@ FetchContent_MakeAvailable(lunasvg)
 
 # ---- Skia (for COLRv1 emoji rendering) ----
 # Skia is OPTIONAL and provides advanced COLRv1 emoji rendering with gradients.
-# Skia uses GN build system (not CMake) and cannot be easily integrated via FetchContent.
+# Now automatically downloaded and set up via FetchContent using prebuilt binaries.
 # The project works fine without Skia, falling back to PNG/bitmap emoji.
-#
-# To use Skia: Build it separately and place libskia.a in thirdparty/skia/lib/
-# See docs/SKIA_SETUP.md for detailed build instructions.
-# Skia is configured for minimal static build with LTO to reduce size:
-# Full Skia (~200MB) -> Minimal static + LTO (~5-20MB final binary increase)
 option(USE_SKIA "Enable Skia for COLRv1 emoji rendering (optional)" ON)
 
-if(USE_SKIA)
-    # Check if Skia library exists in thirdparty/skia
-    if(EXISTS "${CMAKE_SOURCE_DIR}/thirdparty/skia/lib/libskia.a")
-        set(SKIA_AVAILABLE TRUE)
-        set(SKIA_LIBRARY "${CMAKE_SOURCE_DIR}/thirdparty/skia/lib/libskia.a")
-        set(SKIA_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/thirdparty/skia/include")
-        message(STATUS "Found Skia library: ${SKIA_LIBRARY}")
-        message(STATUS "Skia enabled - full COLRv1 emoji rendering available")
-    else()
-        set(SKIA_AVAILABLE FALSE)
-        message(STATUS "Skia library not found at thirdparty/skia/lib/libskia.a")
-        message(STATUS "Skia is optional - project will work without it")
-        message(STATUS "To enable: Build Skia and place it in thirdparty/skia/. See docs/SKIA_SETUP.md")
-        message(STATUS "Falling back to PNG/CBDT + grayscale emoji rendering")
-    endif()
-else()
-    set(SKIA_AVAILABLE FALSE)
-    message(STATUS "Skia disabled - using PNG/CBDT + grayscale emoji rendering")
+# Initialize SKIA_AVAILABLE to FALSE by default
+set(SKIA_AVAILABLE FALSE)
+
+# Add our custom CMake modules directory
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+# Include the Skia FetchContent module which handles downloading prebuilts
+# This will set SKIA_AVAILABLE to TRUE if successful
+include(SkiaFetchContent)
+
+if(NOT SKIA_AVAILABLE)
+    message(STATUS "Skia not available - falling back to PNG/CBDT + grayscale emoji rendering")
 endif()
 
 # ---- ImGUI ----

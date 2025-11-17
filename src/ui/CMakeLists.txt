@@ -18,7 +18,7 @@ target_link_libraries(imbored_ui PUBLIC imgui freetype harfbuzz lunasvg glad)
 if(SKIA_AVAILABLE)
     target_compile_definitions(imbored_ui PRIVATE SKIA_AVAILABLE)
     # Skia headers reference themselves with "include/..." paths, so we need the parent dir
-    target_include_directories(imbored_ui PRIVATE ${CMAKE_SOURCE_DIR}/thirdparty/skia)
+    target_include_directories(imbored_ui PRIVATE ${SKIA_INCLUDE_DIR})
     target_link_libraries(imbored_ui PUBLIC ${SKIA_LIBRARY})
     # Skia needs additional system libraries
     target_link_libraries(imbored_ui PUBLIC fontconfig pthread dl)
