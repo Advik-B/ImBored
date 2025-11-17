@@ -27,6 +27,22 @@ if(NOT CMAKE_GENERATOR MATCHES "Ninja")
     message(WARNING "It is recommended to use Ninja as the build system. Run: cmake -G Ninja -B build -S .")
 endif()
 
+# ============================================================================
+# Dependency Management Strategy
+# ============================================================================
+# This project uses FetchContent to automatically download and build most
+# dependencies, eliminating the need for manual installation.
+#
+# FetchContent-managed dependencies:
+# - GLFW, FreeType, HarfBuzz, libpng, zlib, LunaSVG, glad
+#
+# System dependencies (cannot be fetched, OS-level graphics libraries):
+# - X11/Wayland: Window management (Linux only)
+# - OpenGL: Graphics API (provided by OS/drivers)
+#
+# See docs/BUILD.md for installation instructions.
+# ============================================================================
+
 include(FetchContent)
 
 # ---- GLFW ----
